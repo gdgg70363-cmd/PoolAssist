@@ -7,6 +7,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      ANDROID_HOME: /usr/local/lib/android/sdk
+
     steps:
       - uses: actions/checkout@v4
 
@@ -15,13 +18,9 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
-
-      - name: Accept licenses
-        run: yes | sdkmanager --licenses || true
-
-      - name: Install SDK
-        run: sdkmanager "platforms;android-34" "build-tools;34.0.0"
+      - name: Accept Android Licenses
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -119,7 +118,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/MainActivity.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import android.content.Intent
           import android.graphics.Color
@@ -252,7 +251,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/Physics.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import kotlin.math.abs
           import kotlin.math.atan2
@@ -346,7 +345,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/Detector.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import android.graphics.Bitmap
           import android.graphics.Color
@@ -565,7 +564,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/OverlayView.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import android.content.Context
           import android.graphics.Canvas
@@ -623,7 +622,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/ControlPanel.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import android.content.Context
           import android.graphics.Color
@@ -868,7 +867,7 @@ jobs:
           ENI_EOF
 
           cat > app/src/main/java/com/eni/poolassist/OverlayService.kt << 'ENI_EOF'
-          package com.eni.poolassist
+          package com.en.poolassist
 
           import android.app.Notification
           import android.app.NotificationChannel
