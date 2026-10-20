@@ -365,6 +365,7 @@ jobs:
                   bmp.getPixels(px, 0, w, 0, 0, w, h)
                   val bg = dominant(px, w, h)
                   
+                  // خلي التطبيق يتجاهل الأزرار العلوية والجانبية ويركز بس على نص الشاشة (الطاولة)
                   val topSafe = (h * 0.15).toInt()
                   val bottomSafe = (h * 0.85).toInt()
                   val leftSafe = (w * 0.10).toInt()
@@ -385,9 +386,9 @@ jobs:
                           val mx = maxOf(rr, gg, bb); val mn = minOf(rr, gg, bb); val sat = mx - mn
                           
                           val cls: Int? = when {
-                              mx > 200 && sat < 30 -> Color.WHITE
+                              mx > 220 && sat < 20 -> Color.WHITE
                               mx < 50 && sat < 40 -> Color.parseColor("#222222")
-                              mx > 100 && sat > 70 -> classify(rr, gg, bb)
+                              mx > 100 && sat > 80 -> classify(rr, gg, bb)
                               else -> null
                           }
                           
