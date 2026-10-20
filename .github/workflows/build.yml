@@ -185,7 +185,7 @@ jobs:
                   })
 
                   root.addView(TextView(this).apply {
-                      text = "خطوط تصويب ذكية — كل كرة بلونها"
+                      text = "خطوط تصويب — خط أبيض وخط الهدف"
                       textSize = 14f
                       setTextColor(Color.parseColor("#9C93BD"))
                       setPadding(0, dp(6), 0, dp(18))
@@ -291,46 +291,9 @@ jobs:
 
           import kotlin.math.abs
           import kotlin.math.atan2
-          import kotlin.math.cos
           import kotlin.math.hypot
-          import kotlin.math.min
-          import kotlin.math.sin
-          import kotlin.math.sqrt
 
           object Physics {
-              fun rayCircle(cx: Float, cy: Float, dx: Float, dy: Float, bx: Float, by: Float, r: Float): Float? {
-                  val ox = bx - cx; val oy = by - cy
-                  val b = ox * dx + oy * dy
-                  val c = ox * ox + oy * oy - r * r
-                  val disc = b * b - c
-                  if (disc < 0f) return null
-                  val t = -b - sqrt(disc)
-                  return if (t > 0.001f) t else null
-              }
-
-              fun predictPath(cue: Ball, angle: Float, balls: List<Ball>, w: Float, h: Float, r: Float, maxBounce: Int = 3): List<Pair<Float, Float>> {
-                  var x = cue.x; var y = cue.y
-                  var dx = cos(angle); var dy = sin(angle)
-                  val pts = mutableListOf(x to y)
-                  for (i in 0 until maxBounce) {
-                      var bestT = Float.MAX_VALUE; var hitBall = false
-                      val tw = when { dx > 0f -> (w - r - x) / dx; dx < 0f -> (r - x) / dx; else -> Float.MAX_VALUE }
-                      val th = when { dy > 0f -> (h - r - y) / dy; dy < 0f -> (r - y) / dy; else -> Float.MAX_VALUE }
-                      for (b in balls) {
-                          if (b.isCue) continue
-                          val t = rayCircle(x, y, dx, dy, b.x, b.y, r * 2f)
-                          if (t != null && t < bestT) { bestT = t; hitBall = true }
-                      }
-                      if (!hitBall) bestT = min(tw, th)
-                      if (bestT == Float.MAX_VALUE || bestT <= 0f) break
-                      x += dx * bestT; y += dy * bestT
-                      pts.add(x to y)
-                      if (hitBall) return pts
-                      if (tw < th) dx = -dx else dy = -dy
-                  }
-                  return pts
-              }
-
               fun ghostAngle(cue: Ball, target: Ball, px: Float, py: Float, r: Float): Float? {
                   val ux = px - target.x; val uy = py - target.y
                   val len = hypot(ux, uy)
@@ -365,7 +328,6 @@ jobs:
                   bmp.getPixels(px, 0, w, 0, 0, w, h)
                   val bg = dominant(px, w, h)
                   
-                  // خلي التطبيق يتجاهل الأزرار العلوية والجانبية ويركز بس على نص الشاشة (الطاولة)
                   val topSafe = (h * 0.15).toInt()
                   val bottomSafe = (h * 0.85).toInt()
                   val leftSafe = (w * 0.10).toInt()
@@ -415,24 +377,49 @@ jobs:
                   val targets = balls.filter { !it.isCue }
                   if (targets.isEmpty()) return emptyList()
                   
-                  val pockets = listOf(30f to 30f, (screenW - 30f) to 30f, 30f to (screenH - 30f), (screenW - 30f) to (screenH - 30f))
+                  // حفر ثابتة بناءً على أبعاد الشاشة
+                  val pockets = listOf(
+                      (screenW * 0.06f) to (screenH * 0.22f), // يسار فوق
+                      (screenW * 0.94f) to (screenH * 0.22f), // يمين فوق
+                      (screenW * 0.06f) to (screenH * 0.78f), // يسار تحت
+                      (screenW * 0.94f) to (screenH * 0.78f), // يمين تحت
+                      (screenW * 0.50f) to (screenH * 0.15f), // وسط فوق
+                      (screenW * 0.50f) to (screenH * 0.85f)  // وسط تحت
+                  )
+
+                  var bestTarget: Ball? = null
+                  var bestPocket: Pair<Float, Float>? = null
+                  var bestAng: Float? = null
+                  var minDist = Float.MAX_VALUE
+
+                  // البحث عن أفضل كرة هدف
+                  for (target in targets) {
+                      for (p in pockets) {
+                          val ang = Physics.ghostAngle(cue, target, p.first, p.second, ballR) ?: continue
+                          val dist = hypot(target.x - cue.x, target.y - cue.y)
+                          if (dist < minDist) {
+                              minDist = dist
+                              bestTarget = target
+                              bestPocket = p
+                              bestAng = ang
+                          }
+                      }
+                  }
+
+                  val target = bestTarget ?: return emptyList()
+                  val pocket = bestPocket ?: return emptyList()
+                  val ang = bestAng ?: return emptyList()
+
                   val segs = mutableListOf<Segment>()
                   
-                  for (target in targets) {
-                      var bestPocket: Pair<Float, Float>? = null; var bestD = Float.MAX_VALUE
-                      for (p in pockets) {
-                          val d = hypot(p.first - target.x, p.second - target.y)
-                          if (d < bestD) { bestD = d; bestPocket = p }
-                      }
-                      val pocket = bestPocket ?: continue
-                      val ang = Physics.ghostAngle(cue, target, pocket.first, pocket.second, ballR) ?: continue
-                      
-                      val path = Physics.predictPath(cue, ang, balls, screenW, screenH, ballR, maxBounce = 3)
-                      if (path.size < 2) continue
-                      
-                      segs.add(Segment(Color.WHITE, path, null))
-                      segs.add(Segment(target.color, listOf(target.x to target.y, pocket.first to pocket.second), pocket))
-                  }
+                  // 1. خط الكرة البيضاء إلى الكرة الهدف (أبيض)
+                  val ghostX = cue.x + kotlin.math.cos(ang) * minDist
+                  val ghostY = cue.y + kotlin.math.sin(ang) * minDist
+                  segs.add(Segment(Color.WHITE, listOf(cue.x to cue.y, ghostX to ghostY), null))
+                  
+                  // 2. خط الكرة الهدف إلى الحفرة (بلون الكرة)
+                  segs.add(Segment(target.color, listOf(target.x to target.y, pocket.first to pocket.second), pocket))
+
                   return segs
               }
 
@@ -501,12 +488,12 @@ jobs:
 
           class OverlayView(ctx: Context) : View(ctx) {
               private var segments: List<Segment> = emptyList()
-              private var lineWidth: Float = 4f
+              private var lineWidth: Float = 5f
               private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
                   style = Paint.Style.STROKE; 
                   strokeCap = Paint.Cap.ROUND; 
                   strokeJoin = Paint.Join.ROUND 
-                  alpha = 180
+                  alpha = 200
               }
               private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
@@ -769,6 +756,7 @@ jobs:
                       val paddedW = img.width + padding / pixelStride
                       val buf = plane.buffer
                       buf.rewind()
+                      
                       var padded = paddedBmp
                       if (padded == null || padded.width != paddedW || padded.height != img.height) {
                           padded?.recycle()
@@ -776,14 +764,18 @@ jobs:
                           paddedBmp = padded
                       }
                       padded.copyPixelsFromBuffer(buf)
+                      
                       var cropped = croppedBmp
                       if (cropped == null || cropped.width != img.width || cropped.height != img.height) {
                           cropped?.recycle()
                           cropped = Bitmap.createBitmap(img.width, img.height, Bitmap.Config.ARGB_8888)
                           croppedBmp = cropped
                       }
+                      // السحر هنا: رسم الصورة بالمقاس الصح بدون padding عشان الإحداثيات تظبط
                       val canvas = android.graphics.Canvas(cropped)
-                      canvas.drawBitmap(padded, 0f, 0f, null)
+                      val srcRect = android.graphics.Rect(0, 0, img.width, img.height)
+                      val dstRect = android.graphics.Rect(0, 0, cropped.width, cropped.height)
+                      canvas.drawBitmap(padded, srcRect, dstRect, null)
 
                       val win = getSystemService(WINDOW_SERVICE) as WindowManager
                       val (sw, sh) = if (Build.VERSION.SDK_INT >= 30) {
