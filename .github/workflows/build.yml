@@ -357,8 +357,6 @@ jobs:
 
           object Detector {
               private var buf: IntArray? = null
-              private const val TOP_SKIP = 0.10f
-              private const val BOTTOM_SKIP = 0.86f
 
               fun detect(bmp: Bitmap, scaleFactor: Float): List<Ball> {
                   val w = bmp.width; val h = bmp.height
@@ -368,21 +366,20 @@ jobs:
                   bmp.getPixels(px, 0, w, 0, 0, w, h)
                   val bg = dominant(px, w, h)
                   val out = mutableListOf<Ball>()
-                  val step = 6; val r = 14
-                  val yStart = (h * TOP_SKIP).toInt().coerceAtLeast(step)
-                  val yEnd = (h * BOTTOM_SKIP).toInt().coerceAtMost(h - step)
-                  var y = yStart
-                  while (y < yEnd) {
+                  val step = 4
+                  val r = 10
+                  var y = step
+                  while (y < h - step) {
                       var x = step
                       while (x < w - step) {
                           val c = px[y * w + x]
-                          if (dist2(c, bg) < 45 * 45) { x += step; continue }
+                          if (dist2(c, bg) < 35 * 35) { x += step; continue }
                           val rr = (c shr 16) and 0xFF; val gg = (c shr 8) and 0xFF; val bb = c and 0xFF
                           val mx = maxOf(rr, gg, bb); val mn = minOf(rr, gg, bb); val sat = mx - mn
                           val cls: Int? = when {
-                              mx > 205 && sat < 26 -> Color.WHITE
-                              mx < 48 && sat < 26 -> Color.parseColor("#3A3A3A")
-                              mx > 105 && sat > 85 -> classify(rr, gg, bb)
+                              mx > 190 && sat < 35 -> Color.WHITE
+                              mx < 60 && sat < 35 -> Color.parseColor("#3A3A3A")
+                              mx > 90 && sat > 60 -> classify(rr, gg, bb)
                               else -> null
                           }
                           if (cls != null && isBlob(px, w, h, x, y, c, r)) {
@@ -395,7 +392,7 @@ jobs:
                   val merged = mutableListOf<Ball>()
                   for (b in out) {
                       val near = merged.any {
-                          abs(it.x - b.x) < 60f && abs(it.y - b.y) < 60f && it.isCue == b.isCue && dist2(it.color, b.color) < 90 * 90
+                          abs(it.x - b.x) < 50f && abs(it.y - b.y) < 50f && it.isCue == b.isCue && dist2(it.color, b.color) < 100 * 100
                       }
                       if (!near) merged.add(b)
                   }
@@ -451,7 +448,7 @@ jobs:
                   for (i in 0 until 4) {
                       val nx = xs[i]; val ny = ys[i]
                       if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue
-                      if (dist2(px[ny * w + nx], c) < 60 * 60) count++
+                      if (dist2(px[ny * w + nx], c) < 70 * 70) count++
                   }
                   return count >= 3
               }
@@ -495,7 +492,7 @@ jobs:
               fun updateSegments(list: List<Segment>, width: Float) {
                   segments = list
                   lineWidth = width
-                  postInvalidate() // رسم آمن فقط عند وصول بيانات جديدة
+                  postInvalidate()
               }
 
               fun clear() {
@@ -523,8 +520,14 @@ jobs:
           package com.eni.poolassist
 
           import android.accessibilityservice.AccessibilityService
+          import android.graphics.Color
           import android.graphics.PixelFormat
+          import android.graphics.drawable.GradientDrawable
+          import android.view.Gravity
+          import android.view.MotionEvent
+          import android.view.View
           import android.view.WindowManager
+          import android.widget.TextView
           import android.view.accessibility.AccessibilityEvent
 
           class PoolAccessibilityService : AccessibilityService() {
@@ -537,6 +540,11 @@ jobs:
               private lateinit var overlay: OverlayView
               private var showLines = true
               private var lineScale = 1f
+
+              // زر P العائم (قابل للمس والسحب)
+              private lateinit var controlView: TextView
+              private lateinit var controlParams: WindowManager.LayoutParams
+              private var collapsed = false
 
               override fun onServiceConnected() {
                   super.onServiceConnected()
@@ -556,6 +564,71 @@ jobs:
                   try {
                       win.addView(overlay, params)
                   } catch (e: Exception) {}
+
+                  // إضافة زر P
+                  controlView = TextView(this).apply {
+                      text = "P"
+                      textSize = 18f
+                      gravity = Gravity.CENTER
+                      setTextColor(Color.parseColor("#EDEAF7"))
+                      background = GradientDrawable().apply {
+                          shape = GradientDrawable.OVAL
+                          setColor(Color.parseColor("#7C5CFF"))
+                      }
+                  }
+                  val size = dp(48)
+                  controlParams = WindowManager.LayoutParams(
+                      size, size,
+                      WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                      WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                      PixelFormat.TRANSLUCENT
+                  ).apply {
+                      gravity = Gravity.TOP or Gravity.START
+                      x = dp(14)
+                      y = dp(110)
+                  }
+
+                  controlView.setOnTouchListener(object : View.OnTouchListener {
+                      private var initialX = 0
+                      private var initialY = 0
+                      private var initialTouchX = 0f
+                      private var initialTouchY = 0f
+                      private var moved = false
+
+                      override fun onTouch(v: View, event: MotionEvent): Boolean {
+                          when (event.action) {
+                              MotionEvent.ACTION_DOWN -> {
+                                  initialX = controlParams.x
+                                  initialY = controlParams.y
+                                  initialTouchX = event.rawX
+                                  initialTouchY = event.rawY
+                                  moved = false
+                                  return true
+                              }
+                              MotionEvent.ACTION_MOVE -> {
+                                  val dx = event.rawX - initialTouchX
+                                  val dy = event.rawY - initialTouchY
+                                  if (Math.abs(dx) > dp(8) || Math.abs(dy) > dp(8)) moved = true
+                                  controlParams.x = initialX + dx.toInt()
+                                  controlParams.y = initialY + dy.toInt()
+                                  win.updateViewLayout(controlView, controlParams)
+                                  return true
+                              }
+                              MotionEvent.ACTION_UP -> {
+                                  if (!moved) {
+                                      showLines = !showLines
+                                      if (!showLines) overlay.clear() else overlay.postInvalidate()
+                                  }
+                                  return true
+                              }
+                          }
+                          return false
+                      }
+                  })
+
+                  try {
+                      win.addView(controlView, controlParams)
+                  } catch (e: Exception) {}
               }
 
               fun updateLines(segs: List<Segment>) {
@@ -563,12 +636,15 @@ jobs:
                   else overlay.clear()
               }
 
+              private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
               override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
               override fun onInterrupt() {}
 
               override fun onDestroy() {
                   instance = null
                   try { win.removeView(overlay) } catch (e: Exception) {}
+                  try { win.removeView(controlView) } catch (e: Exception) {}
                   super.onDestroy()
               }
           }
@@ -619,6 +695,11 @@ jobs:
               }
 
               override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+                  if (intent?.action == "STOP") {
+                      stopSelf()
+                      return START_NOT_STICKY
+                  }
+
                   val notif = buildNotif()
                   if (Build.VERSION.SDK_INT >= 29) {
                       startForeground(7, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
@@ -707,7 +788,6 @@ jobs:
               private fun buildNotif(): Notification {
                   val ch = NotificationChannel("eni", "PoolAssist", NotificationManager.IMPORTANCE_LOW)
                   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
-                  // زر لإيقاف الخدمة في أي وقت
                   val stopIntent = PendingIntent.getService(this, 0, Intent(this, OverlayService::class.java).apply { action = "STOP" }, PendingIntent.FLAG_IMMUTABLE)
                   return Notification.Builder(this, "eni")
                       .setContentTitle("PoolAssist يعمل")
