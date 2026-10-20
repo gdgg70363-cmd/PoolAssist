@@ -484,56 +484,37 @@ jobs:
           import android.content.Context
           import android.graphics.Canvas
           import android.graphics.Paint
-          import android.view.SurfaceHolder
-          import android.view.SurfaceView
+          import android.view.View
 
-          class OverlayView(ctx: Context) : SurfaceView(ctx), SurfaceHolder.Callback {
+          class OverlayView(ctx: Context) : View(ctx) {
               private var segments: List<Segment> = emptyList()
               private var lineWidth: Float = 5f
-              private var renderThread: Thread? = null
-              @Volatile private var running = true
               private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
               private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
-              init {
-                  holder.addCallback(this)
-                  setZOrderOnTop(true)
-                  holder.setFormat(android.graphics.PixelFormat.TRANSLUCENT)
-              }
-
               fun updateSegments(list: List<Segment>, width: Float) {
-                  segments = list; lineWidth = width
+                  segments = list
+                  lineWidth = width
+                  postInvalidate() // رسم آمن فقط عند وصول بيانات جديدة
               }
 
-              fun clear() { segments = emptyList() }
+              fun clear() {
+                  segments = emptyList()
+                  postInvalidate()
+              }
 
-              override fun surfaceCreated(holder: SurfaceHolder) {
-                  running = true
-                  renderThread = Thread {
-                      while (running) {
-                          val canvas = holder.lockCanvas() ?: continue
-                          try {
-                              canvas.drawColor(android.graphics.Color.TRANSPARENT, android.graphics.PorterDuff.Mode.CLEAR)
-                              if (segments.isNotEmpty()) {
-                                  linePaint.strokeWidth = lineWidth
-                                  for (seg in segments) {
-                                      linePaint.color = seg.color
-                                      val pts = seg.points
-                                      for (i in 0 until pts.size - 1) {
-                                          canvas.drawLine(pts[i].first, pts[i].second, pts[i + 1].first, pts[i + 1].second, linePaint)
-                                      }
-                                      seg.dot?.let { dotPaint.color = seg.color; canvas.drawCircle(it.first, it.second, lineWidth + 3f, dotPaint) }
-                                  }
-                              }
-                          } finally { holder.unlockCanvasAndPost(canvas) }
-                          try { Thread.sleep(16) } catch (_: InterruptedException) {}
+              override fun onDraw(canvas: Canvas) {
+                  super.onDraw(canvas)
+                  if (segments.isEmpty()) return
+                  linePaint.strokeWidth = lineWidth
+                  for (seg in segments) {
+                      linePaint.color = seg.color
+                      val pts = seg.points
+                      for (i in 0 until pts.size - 1) {
+                          canvas.drawLine(pts[i].first, pts[i].second, pts[i + 1].first, pts[i + 1].second, linePaint)
                       }
-                  }.also { it.start() }
-              }
-
-              override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-              override fun surfaceDestroyed(holder: SurfaceHolder) {
-                  running = false; renderThread?.join(); renderThread = null
+                      seg.dot?.let { dotPaint.color = seg.color; canvas.drawCircle(it.first, it.second, lineWidth + 3f, dotPaint) }
+                  }
               }
           }
           ENI_EOF
@@ -599,6 +580,7 @@ jobs:
           import android.app.Notification
           import android.app.NotificationChannel
           import android.app.NotificationManager
+          import android.app.PendingIntent
           import android.app.Service
           import android.content.Intent
           import android.content.pm.ServiceInfo
@@ -725,10 +707,13 @@ jobs:
               private fun buildNotif(): Notification {
                   val ch = NotificationChannel("eni", "PoolAssist", NotificationManager.IMPORTANCE_LOW)
                   (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(ch)
+                  // زر لإيقاف الخدمة في أي وقت
+                  val stopIntent = PendingIntent.getService(this, 0, Intent(this, OverlayService::class.java).apply { action = "STOP" }, PendingIntent.FLAG_IMMUTABLE)
                   return Notification.Builder(this, "eni")
                       .setContentTitle("PoolAssist يعمل")
                       .setSmallIcon(android.R.drawable.ic_menu_compass)
                       .setOngoing(true)
+                      .addAction(android.R.drawable.ic_media_pause, "إيقاف", stopIntent)
                       .build()
               }
 
