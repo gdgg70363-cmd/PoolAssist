@@ -308,7 +308,6 @@ jobs:
                   return if (t > 0.001f) t else null
               }
 
-              // دالة توقع المسار مع الارتدادات (Bank Shots)
               fun predictPath(cue: Ball, angle: Float, balls: List<Ball>, w: Float, h: Float, r: Float, maxBounce: Int = 3): List<Pair<Float, Float>> {
                   var x = cue.x; var y = cue.y
                   var dx = cos(angle); var dy = sin(angle)
@@ -387,8 +386,8 @@ jobs:
                           
                           val cls: Int? = when {
                               mx > 200 && sat < 30 -> Color.WHITE
-                              mx < 50 && sat < 40 -> Color.parseColor("#222222") // أسود (الكرة 8)
-                              mx > 100 && sat > 70 -> classify(rr, gg, bb) // ألوان الكرات
+                              mx < 50 && sat < 40 -> Color.parseColor("#222222")
+                              mx > 100 && sat > 70 -> classify(rr, gg, bb)
                               else -> null
                           }
                           
@@ -418,7 +417,6 @@ jobs:
                   val pockets = listOf(30f to 30f, (screenW - 30f) to 30f, 30f to (screenH - 30f), (screenW - 30f) to (screenH - 30f))
                   val segs = mutableListOf<Segment>()
                   
-                  // رسم خطوط لكل الكرات المتاحة زي شيتو
                   for (target in targets) {
                       var bestPocket: Pair<Float, Float>? = null; var bestD = Float.MAX_VALUE
                       for (p in pockets) {
@@ -428,13 +426,10 @@ jobs:
                       val pocket = bestPocket ?: continue
                       val ang = Physics.ghostAngle(cue, target, pocket.first, pocket.second, ballR) ?: continue
                       
-                      // تفعيل 3 ارتدادات (Bank Shots) زي الصور
                       val path = Physics.predictPath(cue, ang, balls, screenW, screenH, ballR, maxBounce = 3)
                       if (path.size < 2) continue
                       
-                      // خط الكرة البيضاء (نخليه أبيض زي شيتو)
                       segs.add(Segment(Color.WHITE, path, null))
-                      // خط الكرة الهدف نحو الجيب
                       segs.add(Segment(target.color, listOf(target.x to target.y, pocket.first to pocket.second), pocket))
                   }
                   return segs
@@ -474,14 +469,9 @@ jobs:
 
               private fun classify(r: Int, g: Int, b: Int): Int {
                   val palette = intArrayOf(
-                      Color.rgb(220, 20, 20),   // أحمر
-                      Color.rgb(240, 220, 40),  // أصفر
-                      Color.rgb(30, 80, 220),   // أزرق
-                      Color.rgb(250, 130, 0),   // برتقالي
-                      Color.rgb(30, 160, 30),   // أخضر
-                      Color.rgb(120, 30, 160),  // بنفسجي
-                      Color.rgb(120, 30, 30),   // مارون
-                      Color.rgb(0, 180, 180)    // سماوي
+                      Color.rgb(220, 20, 20), Color.rgb(240, 220, 40), Color.rgb(30, 80, 220),
+                      Color.rgb(250, 130, 0), Color.rgb(30, 160, 30), Color.rgb(120, 30, 160),
+                      Color.rgb(120, 30, 30), Color.rgb(0, 180, 180)
                   )
                   var best = Color.WHITE; var bestD = Int.MAX_VALUE
                   for (p in palette) {
@@ -515,7 +505,7 @@ jobs:
                   style = Paint.Style.STROKE; 
                   strokeCap = Paint.Cap.ROUND; 
                   strokeJoin = Paint.Join.ROUND 
-                  alpha = 180 // شفافية عشان ميبقاش مزعج زي الصورة
+                  alpha = 180
               }
               private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
