@@ -308,7 +308,8 @@ jobs:
                   return if (t > 0.001f) t else null
               }
 
-              fun predictPath(cue: Ball, angle: Float, balls: List<Ball>, w: Float, h: Float, r: Float, maxBounce: Int = 1): List<Pair<Float, Float>> {
+              // دالة توقع المسار مع الارتدادات (Bank Shots)
+              fun predictPath(cue: Ball, angle: Float, balls: List<Ball>, w: Float, h: Float, r: Float, maxBounce: Int = 3): List<Pair<Float, Float>> {
                   var x = cue.x; var y = cue.y
                   var dx = cos(angle); var dy = sin(angle)
                   val pts = mutableListOf(x to y)
@@ -365,7 +366,6 @@ jobs:
                   bmp.getPixels(px, 0, w, 0, 0, w, h)
                   val bg = dominant(px, w, h)
                   
-                  // تجاهل الأطراف العلوية والسفلية والجانبية
                   val topSafe = (h * 0.15).toInt()
                   val bottomSafe = (h * 0.85).toInt()
                   val leftSafe = (w * 0.10).toInt()
@@ -418,10 +418,8 @@ jobs:
                   val pockets = listOf(30f to 30f, (screenW - 30f) to 30f, 30f to (screenH - 30f), (screenW - 30f) to (screenH - 30f))
                   val segs = mutableListOf<Segment>()
                   
-                  // ترتيب الأهداف حسب القرب من الكرة البيضاء (عشان نختار أفضل 3 خطوط بس)
-                  val sortedTargets = targets.sortedBy { hypot(it.x - cue.x, it.y - cue.y) }
-                  
-                  for (target in sortedTargets.take(3)) {
+                  // رسم خطوط لكل الكرات المتاحة زي شيتو
+                  for (target in targets) {
                       var bestPocket: Pair<Float, Float>? = null; var bestD = Float.MAX_VALUE
                       for (p in pockets) {
                           val d = hypot(p.first - target.x, p.second - target.y)
@@ -429,9 +427,14 @@ jobs:
                       }
                       val pocket = bestPocket ?: continue
                       val ang = Physics.ghostAngle(cue, target, pocket.first, pocket.second, ballR) ?: continue
-                      val path = Physics.predictPath(cue, ang, balls, screenW, screenH, ballR, maxBounce = 1)
+                      
+                      // تفعيل 3 ارتدادات (Bank Shots) زي الصور
+                      val path = Physics.predictPath(cue, ang, balls, screenW, screenH, ballR, maxBounce = 3)
                       if (path.size < 2) continue
-                      segs.add(Segment(target.color, path, null))
+                      
+                      // خط الكرة البيضاء (نخليه أبيض زي شيتو)
+                      segs.add(Segment(Color.WHITE, path, null))
+                      // خط الكرة الهدف نحو الجيب
                       segs.add(Segment(target.color, listOf(target.x to target.y, pocket.first to pocket.second), pocket))
                   }
                   return segs
@@ -507,8 +510,13 @@ jobs:
 
           class OverlayView(ctx: Context) : View(ctx) {
               private var segments: List<Segment> = emptyList()
-              private var lineWidth: Float = 5f
-              private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+              private var lineWidth: Float = 4f
+              private val linePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { 
+                  style = Paint.Style.STROKE; 
+                  strokeCap = Paint.Cap.ROUND; 
+                  strokeJoin = Paint.Join.ROUND 
+                  alpha = 180 // شفافية عشان ميبقاش مزعج زي الصورة
+              }
               private val dotPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
 
               fun updateSegments(list: List<Segment>, width: Float) {
@@ -532,7 +540,7 @@ jobs:
                       for (i in 0 until pts.size - 1) {
                           canvas.drawLine(pts[i].first, pts[i].second, pts[i + 1].first, pts[i + 1].second, linePaint)
                       }
-                      seg.dot?.let { dotPaint.color = seg.color; canvas.drawCircle(it.first, it.second, lineWidth + 3f, dotPaint) }
+                      seg.dot?.let { dotPaint.color = seg.color; canvas.drawCircle(it.first, it.second, lineWidth + 2f, dotPaint) }
                   }
               }
           }
